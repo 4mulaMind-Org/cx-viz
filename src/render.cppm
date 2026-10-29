@@ -43,6 +43,9 @@ inline void render_adaptive(
     pq.push({0, 0, cfg.width, 0.0});
     int tiles_processed = 0;
 
+    // Deduplication array
+    std::vector<Complex<>> detected_singularities;
+
     while (!pq.empty()) {
         auto t = pq.top();
         pq.pop();
@@ -51,6 +54,39 @@ inline void render_adaptive(
         int x = t.x, y = t.y, size = t.size;
         int depth = (int)std::log2(cfg.width / size);
 
+        // 1. Pole/Zero Detection Check 
+        if (size <= 16 && depth >= 4) {
+            Complex<> center = to_world(x + size / 2, y + size / 2);
+            double radius = (size * 0.75) * px_to_world; 
+
+            double delta = get_total_delta(f, center, radius);
+            
+            if (std::abs(delta) > 3.14) {
+                // Deduplication check
+                bool already_detected = false;
+                for (const auto& p : detected_singularities) {
+                    if (std::abs(p.re - center.re) < 0.2 && std::abs(p.im - center.im) < 0.2) {
+                        already_detected = true;
+                        break;
+                    }
+                }
+
+                if (!already_detected) {
+                    detected_singularities.push_back(center);
+                    std::cout << "Detected singularity at: (" 
+                              << center.re << ", " << center.im << ") delta=" << delta << "\n";
+                    
+                    for(int dy=0; dy<size; dy++) {
+                        for(int dx=0; dx<size; dx++) {
+                            img[y+dy, x+dx] = 0xFF0000; 
+                        }
+                    }
+                }
+                continue;
+            }
+        }
+
+        // 2. Agar max depth aa gayi...
         if (depth >= cfg.max_depth || size <= 1) {
             for (int dy = 0; dy < size; ++dy) {
                 for (int dx = 0; dx < size; ++dx) {
@@ -61,6 +97,7 @@ inline void render_adaptive(
             continue;
         }
 
+        // 3. Quadtree Error Calculation
         auto c_tl = get_rgb(eval(f, to_world(x, y)));
         auto c_tr = get_rgb(eval(f, to_world(x + size - 1, y)));
         auto c_bl = get_rgb(eval(f, to_world(x, y + size - 1)));
@@ -72,8 +109,8 @@ inline void render_adaptive(
                      color_diff(c_tl, c_c)  + color_diff(c_tr, c_c) +
                      color_diff(c_bl, c_c)  + color_diff(c_br, c_c);
 
-        if (err > 50.0) {
-            // BULLETPROOF SPLIT: Koi pixel miss nahi hoga
+        // 4. Split ya Fill
+        if (err > 50.0 || size > 16) {
             int half1 = size / 2;
             int half2 = size - half1;
             pq.push({x, y, half1, err});
@@ -90,11 +127,8 @@ inline void render_adaptive(
         }
     }
 
-    static bool printed = false;
-    if (!printed) {
-        std::cout << "Tiles processed: " << tiles_processed << "\n";
-        printed = true;
-    }
+    std::cout << "Total Unique Singularities Detected: " << detected_singularities.size() << "\n";
+    std::cout << "Tiles processed: " << tiles_processed << "\n";
 
     std::ofstream out(path, std::ios::binary);
     if (!out) throw std::runtime_error("cannot open output: " + path);
