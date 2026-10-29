@@ -16,6 +16,11 @@ CX-Viz is a C++23 application that visualizes complex mathematical functions (li
 ## 🛠️ Build Instructions (macOS/Linux)
 Requires `Clang 17+` (with C++23 module support), `CMake 3.28+`, and `Ninja`.
 
+## 🌌 Conformal Mapping (Möbius Transformation)
+CX-Viz also supports Möbius transformations (e.g., `w = (z-1)/(z+1)`). This visually demonstrates how conformal maps preserve angles and map straight lines into perfect circles. The grid overlay helps visualize the distortion caused by the transformation.
+
+![Möbius Transformation](mobius.png)
+
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j

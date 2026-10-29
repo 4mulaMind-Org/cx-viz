@@ -24,6 +24,7 @@ struct RenderConfig {
     double center_y = 0.0;
     double half_width = 3.0;
     int max_depth = 9;
+    bool show_grid = true;
 };
 
 inline void render_adaptive(
@@ -33,17 +34,23 @@ inline void render_adaptive(
     std::mdspan<std::uint32_t, std::dextents<int, 2>> img(raw_pixels.data(), cfg.height, cfg.width);
 
     double px_to_world = (2.0 * cfg.half_width) / cfg.width;
+    
+    // Möbius Transformation: w = (z-1)/(z+1)
+    Complex<> ma{1.0, 0.0}, mb{-1.0, 0.0}, mc{1.0, 0.0}, md{1.0, 0.0};
+
     auto to_world = [&](int px, int py) {
         double x = cfg.center_x + (px - cfg.width  * 0.5) * px_to_world;
         double y = cfg.center_y - (py - cfg.height * 0.5) * px_to_world;
-        return Complex<>{x, y};
+        
+        Complex<> z{x, y};
+        
+        // Apply Möbius
+        return apply_mobius(z, ma, mb, mc, md);
     };
 
     std::priority_queue<Tile> pq;
     pq.push({0, 0, cfg.width, 0.0});
     int tiles_processed = 0;
-
-    // Deduplication array
     std::vector<Complex<>> detected_singularities;
 
     while (!pq.empty()) {
@@ -62,7 +69,6 @@ inline void render_adaptive(
             double delta = get_total_delta(f, center, radius);
             
             if (std::abs(delta) > 3.14) {
-                // Deduplication check
                 bool already_detected = false;
                 for (const auto& p : detected_singularities) {
                     if (std::abs(p.re - center.re) < 0.2 && std::abs(p.im - center.im) < 0.2) {
@@ -73,9 +79,6 @@ inline void render_adaptive(
 
                 if (!already_detected) {
                     detected_singularities.push_back(center);
-                    std::cout << "Detected singularity at: (" 
-                              << center.re << ", " << center.im << ") delta=" << delta << "\n";
-                    
                     for(int dy=0; dy<size; dy++) {
                         for(int dx=0; dx<size; dx++) {
                             img[y+dy, x+dx] = 0xFF0000; 
@@ -90,7 +93,19 @@ inline void render_adaptive(
         if (depth >= cfg.max_depth || size <= 1) {
             for (int dy = 0; dy < size; ++dy) {
                 for (int dx = 0; dx < size; ++dx) {
-                    auto c = get_rgb(eval(f, to_world(x + dx, y + dy)));
+                    Complex<> z = to_world(x + dx, y + dy);
+                    
+                    if (cfg.show_grid) {
+                        double gx = std::abs(z.re - std::round(z.re));
+                        double gy = std::abs(z.im - std::round(z.im));
+                        // px_to_world * 1.5 ensures 1-2 pixel thin line
+                        if (gx < px_to_world * 1.5 || gy < px_to_world * 1.5) {
+                            img[y+dy, x+dx] = 0x444444; // Thoda lighter grey
+                            continue;
+                        }
+                    }
+                    
+                    auto c = get_rgb(eval(f, z));
                     img[y + dy, x + dx] = c;
                 }
             }
@@ -109,8 +124,8 @@ inline void render_adaptive(
                      color_diff(c_tl, c_c)  + color_diff(c_tr, c_c) +
                      color_diff(c_bl, c_c)  + color_diff(c_br, c_c);
 
-        // 4. Split ya Fill
-        if (err > 50.0 || size > 16) {
+        // 4. Split ya Fill (Threshold 50 se 10 kar diya)
+        if (err > 10.0 || size > 16) {
             int half1 = size / 2;
             int half2 = size - half1;
             pq.push({x, y, half1, err});
@@ -120,14 +135,26 @@ inline void render_adaptive(
         } else {
             for (int dy = 0; dy < size; ++dy) {
                 for (int dx = 0; dx < size; ++dx) {
-                    auto c = get_rgb(eval(f, to_world(x + dx, y + dy)));
+                    Complex<> z = to_world(x + dx, y + dy);
+                    
+                    if (cfg.show_grid) {
+                        double gx = std::abs(z.re - std::round(z.re));
+                        double gy = std::abs(z.im - std::round(z.im));
+                        // px_to_world * 1.5 ensures 1-2 pixel thin line
+                        if (gx < px_to_world * 1.5 || gy < px_to_world * 1.5) {
+                            img[y+dy, x+dx] = 0x444444; // Thoda lighter grey
+                            continue;
+                        }
+                    }
+                    
+                    auto c = get_rgb(eval(f, z));
                     img[y + dy, x + dx] = c;
                 }
             }
         }
     }
 
-    std::cout << "Total Unique Singularities Detected: " << detected_singularities.size() << "\n";
+    std::cout << "Unique Singularities: " << detected_singularities.size() << "\n";
     std::cout << "Tiles processed: " << tiles_processed << "\n";
 
     std::ofstream out(path, std::ios::binary);

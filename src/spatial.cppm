@@ -50,7 +50,7 @@ inline double color_diff(std::uint32_t c1, std::uint32_t c2) {
     return std::abs(r1 - r2) + std::abs(g1 - g2) + std::abs(b1 - b2);
 }
 
-// Circle Contour
+// 8-Point Circle Contour
 inline double get_total_delta(const Node& f, Complex<> center, double radius) {
     Complex<> p[8];
     for(int i=0; i<8; ++i) {
@@ -75,6 +75,11 @@ inline double get_total_delta(const Node& f, Complex<> center, double radius) {
     }
 
     return total_delta;
+}
+
+// NAYA FUNCTION: Möbius Transformation
+inline Complex<> apply_mobius(Complex<> z, Complex<> a, Complex<> b, Complex<> c, Complex<> d) {
+    return (a * z + b) / (c * z + d);
 }
 
 } // namespace cx

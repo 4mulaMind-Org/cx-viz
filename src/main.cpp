@@ -18,10 +18,11 @@ int main(int argc, char** argv) {
         cfg.width      = 1024; 
         cfg.height     = 1024; 
         cfg.max_depth  = 9;    
-        cfg.half_width = 3.0;  // Static image (no zoom)
+        cfg.half_width = 3.0;  
+        cfg.show_grid  = true; // Naya feature ON
 
-        cx::render_adaptive(*ast, cfg, "pole_detected.ppm");
-        std::printf("Wrote pole_detected.ppm\n");
+        cx::render_adaptive(*ast, cfg, "mobius.ppm");
+        std::printf("Wrote mobius.ppm\n");
     }
     catch (const std::exception& e) {
         std::fprintf(stderr, "error: %s\n", e.what());
